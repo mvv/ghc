@@ -375,13 +375,20 @@ Note [Fingerprinting IfaceDecls]
 The general idea here is that we first examine the 'IfaceDecl's and determine
 the recursive groups of them. We then walk these groups in dependency order,
 serializing each contained 'IfaceDecl' to a "Binary" buffer which we then
-hash using MD5 to produce a fingerprint for the group. However, the
-serialization that we use is a bit funny: we override the @putName@ operation
-with our own which serializes the hash of a 'Name' instead of the 'Name'
-itself. This ensures that the fingerprint of a decl changes if anything in its
-transitive closure changes. This trick is why we must be careful about
+hash using MD5 to produce a fingerprint for the group.
+
+However, the serialization that we use is a bit funny: we override the @putName@
+operation with our own which serializes the hash of a 'Name' instead of the
+'Name' itself. This ensures that the fingerprint of a decl changes if anything
+in its transitive closure changes. This trick is why we must be careful about
 traversing in dependency order: we need to ensure that we have hashes for
 everything referenced by the decl which we are fingerprinting.
+
+Moreover, we need to be careful to distinguish between serialization of binding
+Names (e.g. the ifName field of a IfaceDecl) and non-binding (e.g. the ifInstCls
+field of a IfaceClsInst): only in the non-binding case should we include the
+fingerprint; in the binding case we shouldn't since it is merely the name of the
+thing that we are currently fingerprinting.
 -}
 
 -- | Add fingerprints for top-level declarations to a 'ModIface'.
