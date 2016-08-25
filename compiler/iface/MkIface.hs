@@ -566,7 +566,7 @@ addFingerprints hsc_env mb_old_fingerprint iface0 new_decls
 
    -- put the declarations in a canonical order, sorted by OccName
    let sorted_decls = Map.elems $ Map.fromList $
-                          [(ifName d, e) | e@(_, d) <- decls_w_hashes]
+                          [(getOccName d, e) | e@(_, d) <- decls_w_hashes]
 
    -- the flag hash depends on:
    --   - (some of) dflags
@@ -738,8 +738,8 @@ abiDecl :: IfaceDeclABI -> IfaceDecl
 abiDecl (_, decl, _) = decl
 
 cmp_abiNames :: IfaceDeclABI -> IfaceDeclABI -> Ordering
-cmp_abiNames abi1 abi2 = ifName (abiDecl abi1) `compare`
-                         ifName (abiDecl abi2)
+cmp_abiNames abi1 abi2 = getOccName (abiDecl abi1) `compare`
+                         getOccName (abiDecl abi2)
 
 freeNamesDeclABI :: IfaceDeclABI -> NameSet
 freeNamesDeclABI (_mod, decl, extras) =
