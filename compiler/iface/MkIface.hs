@@ -439,7 +439,6 @@ addFingerprints hsc_env mb_old_fingerprint iface0 new_decls
 
         -- strongly-connected groups of declarations, in dependency order
        groups =
-           pprTrace "edges" (ppr edges) $
            stronglyConnCompFromEdgedVerticesUniq edges
 
        global_hash_fn = mkHashFun hsc_env eps
@@ -461,9 +460,8 @@ addFingerprints hsc_env mb_old_fingerprint iface0 new_decls
           = ASSERT2( isExternalName name, ppr name )
             let hash | nameModule name /= this_mod =  global_hash_fn name
                      | otherwise = snd (lookupOccEnv local_env (getOccName name)
-                           `orElse` pprTrace "urk! lookup local fingerprint" (ppr name $$ ppr (getUnique $ getOccName name) $$ ppr local_env)
-                                      -- (ppr name))
-                                       (undefined,fingerprint0))
+                           `orElse` pprPanic "urk! lookup local fingerprint"
+                                       (ppr name)) -- (undefined,fingerprint0))
                 -- This panic indicates that we got the dependency
                 -- analysis wrong, because we needed a fingerprint for
                 -- an entity that wasn't in the environment.  To debug
@@ -485,7 +483,7 @@ addFingerprints hsc_env mb_old_fingerprint iface0 new_decls
        fingerprint_group (local_env, decls_w_hashes) (AcyclicSCC abi)
           = do let hash_fn = mk_put_name local_env
                    decl = abiDecl abi
-               pprTrace "fingerprinting" (ppr (ifName decl) $$ ppr abi) $ do
+               --pprTrace "fingerprinting" (ppr (ifName decl) ) $ do
                hash <- computeFingerprint hash_fn abi
                env' <- extend_hash_env local_env (hash,decl)
                return (env', (hash,decl) : decls_w_hashes)
@@ -495,7 +493,7 @@ addFingerprints hsc_env mb_old_fingerprint iface0 new_decls
                local_env1 <- foldM extend_hash_env local_env
                                    (zip (repeat fingerprint0) decls)
                let hash_fn = mk_put_name local_env1
-               pprTrace "fingerprinting" (ppr (map ifName decls) ) $ do
+               -- pprTrace "fingerprinting" (ppr (map ifName decls) ) $ do
                let stable_abis = sortBy cmp_abiNames abis
                 -- put the cycle in a canonical order
                hash <- computeFingerprint hash_fn stable_abis
