@@ -20,6 +20,10 @@ module IfaceSyn (
         IfaceAxBranch(..),
         IfaceTyConParent(..),
 
+        -- * Binding names
+        IfaceTopBndr,
+        putIfaceTopBndr, getIfaceTopBndr,
+
         -- Misc
         ifaceDeclImplicitBndrs, visibleIfConDecls,
         ifaceConDeclFields,
@@ -79,6 +83,8 @@ infixl 3 &&&
 ************************************************************************
 -}
 
+-- | A binding top-level 'Name' in an interface file (e.g. the name of an
+-- 'IfaceDecl').
 type IfaceTopBndr = Name
   -- It's convenient to have an Name in the IfaceSyn, although in each
   -- case the namespace is implied by the context. However, having an
@@ -87,6 +93,14 @@ type IfaceTopBndr = Name
   --
   -- We don't serialise the namespace onto the disk though; rather we
   -- drop it when serialising and add it back in when deserialising.
+
+getIfaceTopBndr :: BinHandle -> IO IfaceTopBndr
+getIfaceTopBndr bh = get bh
+
+putIfaceTopBndr :: BinHandle -> IfaceTopBndr -> IO ()
+putIfaceTopBndr bh name =
+    case getUserData bh of
+      UserData{ ud_put_name = put_name } -> put_name bh BindingOcc name
 
 data IfaceDecl
   = IfaceId { ifName      :: IfaceTopBndr,
@@ -921,8 +935,8 @@ pprIfaceConDecl ss gadt_style fls tycon tc_binders parent
     pp_field_args = braces $ sep $ punctuate comma $ ppr_trim $
                     zipWith maybe_show_label fields tys_w_strs
 
-    maybe_show_label :: Name -> (IfaceBang, IfaceType) -> Maybe SDoc
-    maybe_show_label  sel bty
+    maybe_show_label :: IfaceTopBndr -> (IfaceBang, IfaceType) -> Maybe SDoc
+    maybe_show_label sel bty
       | showSub ss sel = Just (pprPrefixIfDeclBndr ss lbl <+> dcolon <+> pprBangTy bty)
       | otherwise      = Nothing
       where
@@ -1453,14 +1467,14 @@ to take account of the use of the data constructor PS in the pattern match.
 instance Binary IfaceDecl where
     put_ bh (IfaceId name ty details idinfo) = do
         putByte bh 0
-        put_ bh name
+        putIfaceTopBndr bh name
         put_ bh ty
         put_ bh details
         put_ bh idinfo
 
     put_ bh (IfaceData a1 a2 a3 a4 a5 a6 a7 a8 a9) = do
         putByte bh 2
-        put_ bh a1
+        putIfaceTopBndr bh a1
         put_ bh a2
         put_ bh a3
         put_ bh a4
@@ -1472,7 +1486,7 @@ instance Binary IfaceDecl where
 
     put_ bh (IfaceSynonym a1 a2 a3 a4 a5) = do
         putByte bh 3
-        put_ bh a1
+        putIfaceTopBndr bh a1
         put_ bh a2
         put_ bh a3
         put_ bh a4
@@ -1480,7 +1494,7 @@ instance Binary IfaceDecl where
 
     put_ bh (IfaceFamily a1 a2 a3 a4 a5 a6) = do
         putByte bh 4
-        put_ bh a1
+        putIfaceTopBndr bh a1
         put_ bh a2
         put_ bh a3
         put_ bh a4
@@ -1490,7 +1504,7 @@ instance Binary IfaceDecl where
     put_ bh (IfaceClass a1 a2 a3 a4 a5 a6 a7 a8) = do
         putByte bh 5
         put_ bh a1
-        put_ bh a2
+        putIfaceTopBndr bh a2
         put_ bh a3
         put_ bh a4
         put_ bh a5
@@ -1500,14 +1514,14 @@ instance Binary IfaceDecl where
 
     put_ bh (IfaceAxiom a1 a2 a3 a4) = do
         putByte bh 6
-        put_ bh a1
+        putIfaceTopBndr bh a1
         put_ bh a2
         put_ bh a3
         put_ bh a4
 
     put_ bh (IfacePatSyn a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11) = do
         putByte bh 7
-        put_ bh a1
+        putIfaceTopBndr bh a1
         put_ bh a2
         put_ bh a3
         put_ bh a4
@@ -1528,7 +1542,7 @@ instance Binary IfaceDecl where
                     idinfo  <- get bh
                     return (IfaceId name ty details idinfo)
             1 -> error "Binary.get(TyClDecl): ForeignType"
-            2 -> do a1  <- get bh
+            2 -> do a1  <- getIfaceTopBndr bh
                     a2  <- get bh
                     a3  <- get bh
                     a4  <- get bh
@@ -1538,13 +1552,13 @@ instance Binary IfaceDecl where
                     a8  <- get bh
                     a9  <- get bh
                     return (IfaceData a1 a2 a3 a4 a5 a6 a7 a8 a9)
-            3 -> do a1 <- get bh
+            3 -> do a1 <- getIfaceTopBndr bh
                     a2 <- get bh
                     a3 <- get bh
                     a4 <- get bh
                     a5 <- get bh
                     return (IfaceSynonym a1 a2 a3 a4 a5)
-            4 -> do a1 <- get bh
+            4 -> do a1 <- getIfaceTopBndr bh
                     a2 <- get bh
                     a3 <- get bh
                     a4 <- get bh
@@ -1552,7 +1566,7 @@ instance Binary IfaceDecl where
                     a6 <- get bh
                     return (IfaceFamily a1 a2 a3 a4 a5 a6)
             5 -> do a1 <- get bh
-                    a2 <- get bh
+                    a2 <- getIfaceTopBndr bh
                     a3 <- get bh
                     a4 <- get bh
                     a5 <- get bh
@@ -1560,12 +1574,12 @@ instance Binary IfaceDecl where
                     a7 <- get bh
                     a8 <- get bh
                     return (IfaceClass a1 a2 a3 a4 a5 a6 a7 a8)
-            6 -> do a1 <- get bh
+            6 -> do a1 <- getIfaceTopBndr bh
                     a2 <- get bh
                     a3 <- get bh
                     a4 <- get bh
                     return (IfaceAxiom a1 a2 a3 a4)
-            7 -> do a1 <- get bh
+            7 -> do a1 <- getIfaceTopBndr bh
                     a2 <- get bh
                     a3 <- get bh
                     a4 <- get bh
@@ -1599,11 +1613,11 @@ instance Binary IfaceFamTyConFlav where
 
 instance Binary IfaceClassOp where
     put_ bh (IfaceClassOp n ty def) = do
-        put_ bh n
+        putIfaceTopBndr bh n
         put_ bh ty
         put_ bh def
     get bh = do
-        n   <- get bh
+        n   <- getIfaceTopBndr bh
         ty  <- get bh
         def <- get bh
         return (IfaceClassOp n ty def)
@@ -1648,25 +1662,27 @@ instance Binary IfaceConDecls where
 
 instance Binary IfaceConDecl where
     put_ bh (IfCon a1 a2 a3 a4 a5 a6 a7 a8 a9 a10) = do
-        put_ bh a1
+        putIfaceTopBndr bh a1
         put_ bh a2
         put_ bh a3
         put_ bh a4
         put_ bh a5
         put_ bh a6
         put_ bh a7
-        put_ bh a8
+        put_ bh (length a8)
+        mapM_ (putIfaceTopBndr bh) a8
         put_ bh a9
         put_ bh a10
     get bh = do
-        a1 <- get bh
+        a1 <- getIfaceTopBndr bh
         a2 <- get bh
         a3 <- get bh
         a4 <- get bh
         a5 <- get bh
         a6 <- get bh
         a7 <- get bh
-        a8 <- get bh
+        n_fields <- get bh
+        a8 <- replicateM n_fields (getIfaceTopBndr bh)
         a9 <- get bh
         a10 <- get bh
         return (IfCon a1 a2 a3 a4 a5 a6 a7 a8 a9 a10)
