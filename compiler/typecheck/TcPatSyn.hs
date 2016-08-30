@@ -390,11 +390,11 @@ tcPatSynMatcher (L loc name) lpat
                 (args, arg_tys) pat_ty
   = do { rr_name <- newNameAt (mkTyVarOcc "rep") loc
        ; tv_name <- newNameAt (mkTyVarOcc "r")   loc
-       ; let rr_tv    = mkTcTyVar rr_name runtimeRepTy (SkolemTv False)
-             rr       = mkTyVarTy rr_tv
-             res_tv   = mkTcTyVar tv_name  (tYPE rr) (SkolemTv False)
-             is_unlifted = null args && null prov_dicts
+       ; let rr_tv  = mkTcTyVar rr_name runtimeRepTy vanillaSkolemTv
+             rr     = mkTyVarTy rr_tv
+             res_tv = mkTcTyVar tv_name  (tYPE rr) vanillaSkolemTv
              res_ty = mkTyVarTy res_tv
+             is_unlifted = null args && null prov_dicts
              (cont_args, cont_arg_tys)
                | is_unlifted = ([nlHsVar voidPrimId], [voidPrimTy])
                | otherwise   = (args,                 arg_tys)

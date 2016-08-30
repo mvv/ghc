@@ -1,5 +1,5 @@
 {-# OPTIONS -XImplicitParams -XRankNTypes #-}
- module Bug where
+module Bug where
 
 t :: forall a. ((?p :: Int) => a) -> String
 t _ = "Hello"

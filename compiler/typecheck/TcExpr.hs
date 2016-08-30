@@ -1267,7 +1267,7 @@ tcTupArgs args tys
 tcSyntaxOp :: CtOrigin
            -> SyntaxExpr Name
            -> [SyntaxOpType]           -- ^ shape of syntax operator arguments
-           -> ExpType                  -- ^ overall result type
+           -> ExpRhoType               -- ^ overall result type
            -> ([TcSigmaType] -> TcM a) -- ^ Type check any arguments
            -> TcM (a, SyntaxExpr TcId)
 -- ^ Typecheck a syntax operator
@@ -1507,8 +1507,7 @@ tcExprSig expr sig@(PartialSig { psig_name = name, sig_loc = loc })
                  then return idHsWrapper  -- Fast path; also avoids complaint when we infer
                                           -- an ambiguouse type and have AllowAmbiguousType
                                           -- e..g infer  x :: forall a. F a -> Int
-                 else tcSubType_NC ExprSigCtxt inferred_sigma
-                                   (mkCheckExpType my_sigma)
+                 else tcSubType_NC ExprSigCtxt inferred_sigma my_sigma
 
        ; traceTc "tcExpSig" (ppr qtvs $$ ppr givens $$ ppr inferred_sigma $$ ppr my_sigma)
        ; let poly_wrap = wrap
@@ -1750,7 +1749,7 @@ tcSeq loc fun_name args res_ty
               -> do { rr_ty <- newFlexiTyVarTy runtimeRepTy
                     ; ty_arg2 <- tcHsTypeApp hs_ty_arg2 (tYPE rr_ty)
                                    -- see Note [Typing rule for seq]
-                    ; _ <- tcSubTypeDS GenSigCtxt noThing ty_arg2 res_ty
+                    ; _ <- tcSubTypeDS GenSigCtxt ty_arg2 res_ty
                     ; return (term_arg1, term_arg2, mkCheckExpType ty_arg2) }
             [Left term_arg1, Left term_arg2]
               -> return (term_arg1, term_arg2, res_ty)
@@ -1773,7 +1772,7 @@ tcTagToEnum loc fun_name args res_ty
        ; arg <- case args of
            [Right hs_ty_arg, Left term_arg]
              -> do { ty_arg <- tcHsTypeApp hs_ty_arg liftedTypeKind
-                   ; _ <- tcSubTypeDS GenSigCtxt noThing ty_arg res_ty
+                   ; _ <- tcSubTypeDS GenSigCtxt ty_arg res_ty
                      -- other than influencing res_ty, we just
                      -- don't care about a type arg passed in.
                      -- So drop the evidence.

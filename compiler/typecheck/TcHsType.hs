@@ -1288,7 +1288,8 @@ kcHsTyVarBndrs name cusk open_fam all_kind_vars
           , hsq_dependent = dep_names }) thing_inside
   | cusk
   = do { kv_kinds <- mk_kv_kinds
-       ; let scoped_kvs = zipWith mk_skolem_tv kv_ns kv_kinds
+       ; lvl <- getTcLevel
+       ; let scoped_kvs = zipWith (mk_skolem_tv lvl) kv_ns kv_kinds
        ; tcExtendTyVarEnv2 (kv_ns `zip` scoped_kvs) $
     do { (tc_binders, res_kind, stuff) <- solveEqualities $
                                           bind_telescope hs_tvs thing_inside
@@ -1539,14 +1540,16 @@ tcHsTyVarName m_kind name
            _ -> do { kind <- case m_kind of
                                Just kind -> return kind
                                Nothing   -> newMetaKindVar
-                   ; return (mk_skolem_tv name kind, False) }}
+                   ; tv <- newSkolemTyVar name kind
+                   ; return (tv, False) }}
 
 -- makes a new skolem tv
 newSkolemTyVar :: Name -> Kind -> TcM TcTyVar
-newSkolemTyVar name kind = return (mk_skolem_tv name kind)
+newSkolemTyVar name kind = do { lvl <- getTcLevel
+                              ; return (mk_skolem_tv lvl name kind) }
 
-mk_skolem_tv :: Name -> Kind -> TcTyVar
-mk_skolem_tv n k = mkTcTyVar n k vanillaSkolemTv
+mk_skolem_tv :: TcLevel -> Name -> Kind -> TcTyVar
+mk_skolem_tv lvl n k = mkTcTyVar n k (SkolemTv lvl False)
 
 ------------------
 kindGeneralizeType :: Type -> TcM Type
