@@ -58,15 +58,20 @@ import ListSetOps ( getNth )
 -}
 
 tcLetPat :: (Name -> Maybe TcId)
+         -> (Name -> TcType -> TcM TcId)
          -> LPat Name -> ExpSigmaType
          -> TcM a
          -> TcM (LPat TcId, a)
-tcLetPat sig_fn pat pat_ty thing_inside
-  = tc_lpat pat pat_ty penv thing_inside
-  where
-    penv = PE { pe_lazy = True
-              , pe_ctxt = LetPat sig_fn
-              , pe_orig = PatOrigin }
+tcLetPat sig_fn new_bndr pat pat_ty thing_inside
+  = do { bind_lvl <- getTcLevel
+       ; let ctxt = LetPat { pc_lvl    = bind_lvl
+                           , pc_sig_fn = sig_fn
+                           , pc_new    = new_bndr }
+             penv = PE { pe_lazy = True
+                       , pe_ctxt = ctxt
+                       , pe_orig = PatOrigin }
+
+       ; tc_lpat pat pat_ty penv thing_inside }
 
 -----------------
 tcPats :: HsMatchContext Name
@@ -122,7 +127,16 @@ data PatCtxt
 
   | LetPat   -- Used only for let(rec) pattern bindings
              -- See Note [Typing patterns in pattern bindings]
-       (Name -> Maybe TcId)    -- Tells the expected type for this binder
+       { pc_lvl    :: TcLevel
+                   -- Level of the binding group
+
+       , pc_sig_fn :: Name -> Maybe TcId
+                   -- Tells the expected type
+                   -- for binders with a signature
+
+       , pc_new :: Name -> TcType -> TcM TcId
+                -- How to make a new binder
+       }        -- for binders without signatures
 
 makeLazy :: PatEnv -> PatEnv
 makeLazy penv = penv { pe_lazy = True }
@@ -141,18 +155,29 @@ tcPatBndr :: PatEnv -> Name -> ExpSigmaType -> TcM (HsWrapper, TcId)
 -- (coi, xp) = tcPatBndr penv x pat_ty
 -- Then coi : pat_ty ~ typeof(xp)
 --
-tcPatBndr (PE { pe_ctxt = LetPat lookup_sig
-              , pe_orig = orig }) bndr_name pat_ty
+tcPatBndr (PE { pe_ctxt = LetPat { pc_lvl    = bind_lvl
+                                 , pc_sig_fn = sig_fn
+                                 , pc_new    = mk_new_bndr }
+              , pe_orig = orig }) bndr_name exp_pat_ty
           -- See Note [Typing patterns in pattern bindings]
-  | Just bndr_id <- lookup_sig bndr_name
-  = do { wrap <- tcSubTypeET orig pat_ty (idType bndr_id)
-       ; traceTc "tcPatBndr(lsl,sig)" (ppr bndr_id $$ ppr (idType bndr_id) $$ ppr pat_ty)
+  | Just bndr_id <- sig_fn bndr_name
+  = do { wrap <- tcSubTypeET orig exp_pat_ty (idType bndr_id)
+       ; traceTc "tcPatBndr(sig)" (ppr bndr_id $$ ppr (idType bndr_id) $$ ppr exp_pat_ty)
        ; return (wrap, bndr_id) }
 
-  | otherwise  -- No signature
-  = pprPanic "tcPatBndr" (ppr bndr_name)
+  | otherwise
+  = do { (co, bndr_ty) <- case exp_pat_ty of
+             Check pat_ty    -> promoteTcType orig bind_lvl pat_ty
+             Infer infer_res -> ASSERT( bind_lvl == ir_lvl infer_res )
+                                do { bndr_ty <- inferResultToType infer_res
+                                   ; return (mkTcNomReflCo bndr_ty, bndr_ty) }
+       ; bndr_id <- mk_new_bndr bndr_name bndr_ty
+       ; traceTc "tcPatBndr(nosig)" (vcat [ ppr bind_lvl
+                                          , ppr exp_pat_ty, ppr bndr_ty, ppr co
+                                          , ppr bndr_id ])
+       ; return (mkWpCastN co, bndr_id) }
 
-tcPatBndr (PE { pe_ctxt = _lam_or_proc }) bndr_name pat_ty
+tcPatBndr _ bndr_name pat_ty
   = do { pat_ty <- expTypeToType pat_ty
        ; traceTc "tcPatBndr(not let)" (ppr bndr_name $$ ppr pat_ty)
        ; return (idHsWrapper, mkLocalId bndr_name pat_ty) }
@@ -1128,7 +1153,7 @@ Lazy patterns can't bind existentials.  They arise in two ways:
 The pe_lazy field of PatEnv says whether we are inside a lazy
 pattern (perhaps deeply)
 
-See also Note [Existentials in pattern bindings] in TcBinds
+See also Note [Typechecking pattern bindings] in TcBinds
 -}
 
 maybeWrapPatCtxt :: Pat Name -> (TcM a -> TcM b) -> TcM a -> TcM b
