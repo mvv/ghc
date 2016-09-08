@@ -14,7 +14,6 @@ import Binary
 import Name
 import Panic
 import Util
-import Outputable
 
 fingerprintBinMem :: BinHandle -> IO Fingerprint
 fingerprintBinMem bh =
@@ -29,8 +28,6 @@ computeFingerprint put_nonbinding_name a = do
   bh <- return $ setUserData bh $ newWriteState put_nonbinding_name putNameLiterally putFS
   put_ bh a
   fp <- fingerprintBinMem bh
-  withBinBuffer bh (\x -> -- pprTrace "computeFingerprint" (ppr fp $$ text (show x)) $
-                          return a)
   return fp
 
 -- | Used when we want to fingerprint a structure without depending on the
