@@ -58,6 +58,7 @@ Basic idea:
 #include "HsVersions.h"
 
 import IfaceSyn
+import BinFingerprint
 import LoadIface
 import FlagChecker
 
@@ -457,11 +458,9 @@ addFingerprints hsc_env mb_old_fingerprint iface0 new_decls
         -- change if the fingerprint for anything it refers to (transitively)
         -- changes.
        mk_put_name :: OccEnv (OccName,Fingerprint)
-                   -> BinHandle -> IsBindingOcc -> Name -> IO  ()
-       mk_put_name _local_env bh BindingOcc name
-          = putNameLiterally bh BindingOcc name
-       mk_put_name local_env bh NonBindingOcc name
-          | isWiredInName name  =  putNameLiterally bh NonBindingOcc name
+                   -> BinHandle -> Name -> IO  ()
+       mk_put_name local_env bh name
+          | isWiredInName name  =  putNameLiterally bh name
            -- wired-in names don't have fingerprints
           | otherwise
           = ASSERT2( isExternalName name, ppr name )
@@ -839,14 +838,6 @@ declExtras fix_fn ann_fn rule_env inst_env fi_env decl
 
 lookupOccEnvL :: OccEnv [v] -> OccName -> [v]
 lookupOccEnvL env k = lookupOccEnv env k `orElse` []
-
--- | Used when we want to fingerprint a structure without depending on the
--- fingerprints of external Names that it refers to.
-putNameLiterally :: BinHandle -> IsBindingOcc -> Name -> IO ()
-putNameLiterally bh _ name = ASSERT( isExternalName name )
-  do
-    put_ bh $! nameModule name
-    put_ bh $! nameOccName name
 
 {-
 -- for testing: use the md5sum command to generate fingerprints and

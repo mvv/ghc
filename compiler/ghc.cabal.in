@@ -302,6 +302,7 @@ Library
         HsTypes
         HsUtils
         BinIface
+        BinFingerprint
         BuildTyCl
         IfaceEnv
         IfaceSyn

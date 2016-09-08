@@ -429,6 +429,7 @@ compiler_stage2_dll0_MODULES = \
 	Bag \
 	BasicTypes \
 	Binary \
+	BinFingerprint \
 	BooleanFormula \
 	BufWrite \
 	Class \

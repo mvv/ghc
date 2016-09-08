@@ -21,7 +21,6 @@ module Binary
     {-class-} Binary(..),
     {-type-}  BinHandle,
     SymbolTable, Dictionary,
-    IsBindingOcc(..),
 
    openBinMem,
 --   closeBin,
@@ -30,25 +29,23 @@ module Binary
    seekBy,
    tellBin,
    castBin,
+   isEOFBin,
+   withBinBuffer,
 
    writeBinMem,
    readBinMem,
 
-   fingerprintBinMem,
-   computeFingerprint,
-
-   isEOFBin,
-
    putAt, getAt,
 
-   -- for writing instances:
+   -- * For writing instances
    putByte,
    getByte,
 
-   -- lazy Bin I/O
+   -- * Lazy Binary I/O
    lazyGet,
    lazyPut,
 
+   -- * User data
    UserData(..), getUserData, setUserData,
    newReadState, newWriteState,
    putDictionary, getDictionary, putFS,
@@ -105,6 +102,14 @@ getUserData bh = bh_usr bh
 
 setUserData :: BinHandle -> UserData -> BinHandle
 setUserData bh us = bh { bh_usr = us }
+
+-- | Get access to the underlying buffer
+withBinBuffer :: BinHandle -> (ByteString -> IO a) -> IO a
+withBinBuffer (BinMem _ ix_r _ arr_r) action = do
+  arr <- readIORef arr_r
+  ix <- readFastMutInt ix_r
+  withForeignPtr arr $ \ptr ->
+    BS.unsafePackCStringLen (castPtr ptr, ix) >>= action
 
 
 ---------------------------------------------------------------
@@ -200,23 +205,6 @@ readBinMem filename = do
   sz_r <- newFastMutInt
   writeFastMutInt sz_r filesize
   return (BinMem noUserData ix_r sz_r arr_r)
-
-fingerprintBinMem :: BinHandle -> IO Fingerprint
-fingerprintBinMem (BinMem _ ix_r _ arr_r) = do
-  arr <- readIORef arr_r
-  ix <- readFastMutInt ix_r
-  withForeignPtr arr $ \p -> fingerprintData p ix
-
-computeFingerprint :: Binary a
-                   => (BinHandle -> IsBindingOcc -> Name -> IO ())
-                   -> a
-                   -> IO Fingerprint
-
-computeFingerprint put_name a = do
-  bh <- openBinMem (3*1024) -- just less than a block
-  bh <- return $ setUserData bh $ newWriteState put_name putFS
-  put_ bh a
-  fingerprintBinMem bh
 
 -- expand the size of the array to include a specified offset
 expandBin :: BinHandle -> Int -> IO ()
@@ -604,12 +592,19 @@ lazyGet bh = do
 -- UserData
 -- -----------------------------------------------------------------------------
 
--- | Is an occurrence of a 'Name' a binding occurrence?
+-- | Information we keep around during interface file
+-- serialization/deserialization. Namely we keep the functions for serializing
+-- and deserializing 'Name's and 'FastString's. We do this because we actually
+-- use serialization in two distinct settings,
 --
--- This is passed to `ud_put_name' to help during fingerprinting. See
--- Note [Fingerprinting IfaceDecls] for details.
-data IsBindingOcc = BindingOcc | NonBindingOcc
-
+-- * When serializing interface files themselves
+-- * When computing the fingerprint of an IfaceDecl (which we computing by
+--   hashing its Binary serialization)
+--
+-- These two settings have different needs while serializing Names: Names in
+-- interface files are serialized via a symbol table (see Note [Symbol table
+-- representation of names] in BinIface). See Note [Fingerprinting IfaceDecls]
+-- for discussion of fingerprinting.
 data UserData =
    UserData {
         -- for *deserialising* only:
@@ -617,27 +612,36 @@ data UserData =
         ud_get_fs   :: BinHandle -> IO FastString,
 
         -- for *serialising* only:
-        ud_put_name :: BinHandle -> IsBindingOcc -> Name -> IO (),
+        ud_put_nonbinding_name :: BinHandle -> Name -> IO (),
+        -- ^ serialize a non-binding 'Name' (e.g. a reference to another
+        -- binding).
+        ud_put_binding_name :: BinHandle -> Name -> IO (),
+        -- ^ serialize a binding 'Name' (e.g. the name of an IfaceDecl)
         ud_put_fs   :: BinHandle -> FastString -> IO ()
    }
 
-newReadState :: (BinHandle -> IO Name)
+newReadState :: (BinHandle -> IO Name)   -- ^ how to deserialize 'Name's
              -> (BinHandle -> IO FastString)
              -> UserData
 newReadState get_name get_fs
   = UserData { ud_get_name = get_name,
                ud_get_fs   = get_fs,
-               ud_put_name = undef "put_name",
+               ud_put_nonbinding_name = undef "put_nonbinding_name",
+               ud_put_binding_name    = undef "put_binding_name",
                ud_put_fs   = undef "put_fs"
              }
 
-newWriteState :: (BinHandle -> IsBindingOcc -> Name -> IO ())
+newWriteState :: (BinHandle -> Name -> IO ())
+                 -- ^ how to serialize non-binding 'Name's
+              -> (BinHandle -> Name -> IO ())
+                 -- ^ how to serialize binding 'Name's
               -> (BinHandle -> FastString -> IO ())
               -> UserData
-newWriteState put_name put_fs
+newWriteState put_nonbinding_name put_binding_name put_fs
   = UserData { ud_get_name = undef "get_name",
                ud_get_fs   = undef "get_fs",
-               ud_put_name = put_name,
+               ud_put_nonbinding_name = put_nonbinding_name,
+               ud_put_binding_name    = put_binding_name,
                ud_put_fs   = put_fs
              }
 

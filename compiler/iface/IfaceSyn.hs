@@ -41,6 +41,7 @@ module IfaceSyn (
 #include "HsVersions.h"
 
 import IfaceType
+import BinFingerprint
 import CoreSyn( IsOrphan )
 import PprCore()            -- Printing DFunArgs
 import Demand
@@ -100,7 +101,9 @@ getIfaceTopBndr bh = get bh
 putIfaceTopBndr :: BinHandle -> IfaceTopBndr -> IO ()
 putIfaceTopBndr bh name =
     case getUserData bh of
-      UserData{ ud_put_name = put_name } -> put_name bh BindingOcc name
+      UserData{ ud_put_binding_name = put_binding_name } ->
+          --pprTrace "putIfaceTopBndr" (ppr name) $
+          put_binding_name bh name
 
 data IfaceDecl
   = IfaceId { ifName      :: IfaceTopBndr,

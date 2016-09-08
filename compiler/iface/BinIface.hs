@@ -198,10 +198,11 @@ writeBinIface dflags hi_path mod_iface = do
 
     -- Put the main thing,
     bh <- return $ setUserData bh $ newWriteState (putName bin_dict bin_symtab)
+                                                  (putName bin_dict bin_symtab)
                                                   (putFastString bin_dict)
     put_ bh mod_iface
 
-    -- Write the symtab pointer at the fornt of the file
+    -- Write the symtab pointer at the front of the file
     symtab_p <- tellBin bh        -- This is where the symtab will start
     putAt bh symtab_p_p symtab_p  -- Fill in the placeholder
     seekBin bh symtab_p           -- Seek back to the end of the file
@@ -296,11 +297,11 @@ serialiseName bh name _ = do
 -- During serialization we check for known-key things using isKnownKeyName.
 
 -- See Note [Symbol table representation of names]
-putName :: BinDictionary -> BinSymbolTable -> BinHandle -> IsBindingOcc -> Name -> IO ()
+putName :: BinDictionary -> BinSymbolTable -> BinHandle -> Name -> IO ()
 putName _dict BinSymbolTable{
                bin_symtab_map = symtab_map_ref,
                bin_symtab_next = symtab_next }
-        bh _is_binding name
+        bh name
   | isKnownKeyName name
   , let (c, u) = unpkUnique (nameUnique name) -- INVARIANT: (ord c) fits in 8 bits
   = -- ASSERT(u < 2^(22 :: Int))
