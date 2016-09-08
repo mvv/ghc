@@ -114,10 +114,10 @@ getCTupleTyConName n =
 getCTupleDataConUnique :: Int -> Name
 getCTupleDataConUnique n =
     case n `divMod` 3 of
-      (arity, 0) -> cTupleDataConName arity
-      (arity, 1) -> panic "getCTupleDataConName: no worker"
-      (arity, 2) -> mkPrelTyConRepName $ cTupleDataConName arity
-      _          -> panic "getCTupleDataConName: impossible"
+      (arity,  0) -> cTupleDataConName arity
+      (_arity, 1) -> panic "getCTupleDataConName: no worker"
+      (arity,  2) -> mkPrelTyConRepName $ cTupleDataConName arity
+      _           -> panic "getCTupleDataConName: impossible"
 
 --------------------------------------------------
 -- Normal tuples
