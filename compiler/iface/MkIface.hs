@@ -446,6 +446,7 @@ addFingerprints hsc_env mb_old_fingerprint iface0 new_decls
                   where n = occName $ ifName d
 
         -- strongly-connected groups of declarations, in dependency order
+       groups :: [SCC IfaceDeclABI]
        groups =
            stronglyConnCompFromEdgedVerticesUniq edges
 
