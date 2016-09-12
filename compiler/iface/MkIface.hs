@@ -418,7 +418,7 @@ addFingerprints hsc_env mb_old_fingerprint iface0 new_decls
 
        edges :: [(IfaceDeclABI, Unique, [Unique])]
        edges = [ (abi, getUnique (getOccName decl), out)
-               | decl <- new_decls
+               | decl <- sortBy (comparing getOccName) new_decls
                , let abi = declABI decl
                , let out = localOccs $ freeNamesDeclABI abi
                ]
