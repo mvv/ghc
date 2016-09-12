@@ -81,7 +81,7 @@ getUnboxedSumName n =
     case n .&. 0xff of
       0xff -> tyConName $ sumTyCon arity
       alt  -> dataConName $ sumDataCon (alt + 1) arity
-  where arity = n `shiftR` 0xff
+  where arity = n `shiftR` 8
 
 -- Note [Uniques for tuple type and data constructors]
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
