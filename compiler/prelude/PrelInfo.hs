@@ -30,6 +30,7 @@ module PrelInfo (
 import KnownUniques
 
 import ConLike          ( ConLike(..) )
+import THNames          ( templateHaskellNames )
 import PrelNames
 import PrelRules
 import Avail
@@ -37,6 +38,7 @@ import PrimOp
 import DataCon
 import Id
 import Name
+import NameEnv
 import MkId
 import TysPrim
 import TysWiredIn
@@ -45,9 +47,11 @@ import Class
 import TyCon
 import UniqFM
 import Util
+import Panic
 import {-# SOURCE #-} TcTypeNats ( typeNatTyCons )
 
 import Control.Applicative ((<|>))
+import Data.List        ( intercalate )
 import Data.Array
 import Data.Maybe
 
@@ -84,42 +88,76 @@ knownKeyNames :: [Name]
 -- you get a Name with the correct known key
 -- (See Note [Known-key names] in PrelNames)
 knownKeyNames
-  = concat [ wired_tycon_kk_names funTyCon
-           , concatMap wired_tycon_kk_names primTyCons
-
-           , concatMap wired_tycon_kk_names wiredInTyCons
-             -- Does not include tuples
-
-           , concatMap wired_tycon_kk_names typeNatTyCons
-
-           , map idName wiredInIds
-           , map (idName . primOpId) allThePrimOps
-           , basicKnownKeyNames ]
-
+  | debugIsOn
+  , Just badNamesStr <- knownKeyNamesOkay all_names
+  = panic ("badAllKnownKeyNames:\n" ++ badNamesStr)
+       -- NB: We can't use ppr here, because this is sometimes evaluated in a
+       -- context where there are no DynFlags available, leading to a cryptic
+       -- "<<details unavailable>>" error. (This seems to happen only in the
+       -- stage 2 compiler, for reasons I [Richard] have no clue of.)
+  | otherwise
+  = all_names
   where
-  -- All of the names associated with a wired-in TyCon.
-  -- This includes the TyCon itself, its DataCons and promoted TyCons.
-  wired_tycon_kk_names :: TyCon -> [Name]
-  wired_tycon_kk_names tc =
+    all_names =
+      concat [ wired_tycon_kk_names funTyCon
+            , concatMap wired_tycon_kk_names primTyCons
+
+            , concatMap wired_tycon_kk_names wiredInTyCons
+              -- Does not include tuples
+
+            , concatMap wired_tycon_kk_names typeNatTyCons
+
+            , map idName wiredInIds
+            , map (idName . primOpId) allThePrimOps
+            , basicKnownKeyNames
+            , templateHaskellNames
+            ]
+    -- All of the names associated with a wired-in TyCon.
+    -- This includes the TyCon itself, its DataCons and promoted TyCons.
+    wired_tycon_kk_names :: TyCon -> [Name]
+    wired_tycon_kk_names tc =
       tyConName tc : (rep_names tc ++ concatMap thing_kk_names (implicitTyConThings tc))
 
-  wired_datacon_kk_names :: DataCon -> [Name]
-  wired_datacon_kk_names dc
-   = dataConName dc : rep_names (promoteDataCon dc)
+    wired_datacon_kk_names :: DataCon -> [Name]
+    wired_datacon_kk_names dc =
+      dataConName dc : rep_names (promoteDataCon dc)
 
-  thing_kk_names :: TyThing -> [Name]
-  thing_kk_names (ATyCon tc)                 = wired_tycon_kk_names tc
-  thing_kk_names (AConLike (RealDataCon dc)) = wired_datacon_kk_names dc
-  thing_kk_names thing                       = [getName thing]
+    thing_kk_names :: TyThing -> [Name]
+    thing_kk_names (ATyCon tc)                 = wired_tycon_kk_names tc
+    thing_kk_names (AConLike (RealDataCon dc)) = wired_datacon_kk_names dc
+    thing_kk_names thing                       = [getName thing]
 
-  -- The TyConRepName for a known-key TyCon has a known key,
-  -- but isn't itself an implicit thing.  Yurgh.
-  -- NB: if any of the wired-in TyCons had record fields, the record
-  --     field names would be in a similar situation.  Ditto class ops.
-  --     But it happens that there aren't any
-  rep_names tc = case tyConRepName_maybe tc of
-                       Just n  -> [n]
-                       Nothing -> []
+    -- The TyConRepName for a known-key TyCon has a known key,
+    -- but isn't itself an implicit thing.  Yurgh.
+    -- NB: if any of the wired-in TyCons had record fields, the record
+    --     field names would be in a similar situation.  Ditto class ops.
+    --     But it happens that there aren't any
+    rep_names tc = case tyConRepName_maybe tc of
+                        Just n  -> [n]
+                        Nothing -> []
+
+-- | Check the known-key names list of consistency.
+knownKeyNamesOkay :: [Name] -> Maybe String
+knownKeyNamesOkay all_names
+  | null badNamesPairs
+  = Nothing
+  | otherwise
+  = Just badNamesStr
+  where
+    namesEnv      = foldl (\m n -> extendNameEnv_Acc (:) singleton m n n)
+                          emptyUFM all_names
+    badNamesEnv   = filterNameEnv (\ns -> length ns > 1) namesEnv
+    badNamesPairs = nonDetUFMToList badNamesEnv
+      -- It's OK to use nonDetUFMToList here because the ordering only affects
+      -- the message when we get a panic
+    badNamesStrs  = map pairToStr badNamesPairs
+    badNamesStr   = unlines badNamesStrs
+
+    pairToStr (uniq, ns) = "        " ++
+                           show uniq ++
+                           ": [" ++
+                           intercalate ", " (map (occNameString . nameOccName) ns) ++
+                           "]"
 
 -- | Given a 'Unique' lookup its associated 'Name' if it corresponds to a
 -- known-key thing.
@@ -158,7 +196,7 @@ primOpId op = primOpIds ! primOpTag op
 {-
 ************************************************************************
 *                                                                      *
-\subsection{Export lists for pseudo-modules (GHC.Prim)}
+            Export lists for pseudo-modules (GHC.Prim)
 *                                                                      *
 ************************************************************************
 
@@ -176,7 +214,7 @@ ghcPrimExports
 {-
 ************************************************************************
 *                                                                      *
-\subsection{Built-in keys}
+            Built-in keys
 *                                                                      *
 ************************************************************************
 
@@ -190,7 +228,7 @@ maybeIntLikeCon  con = con `hasKey` intDataConKey
 {-
 ************************************************************************
 *                                                                      *
-\subsection{Class predicates}
+            Class predicates
 *                                                                      *
 ************************************************************************
 -}

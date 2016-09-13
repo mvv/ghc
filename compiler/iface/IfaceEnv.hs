@@ -22,7 +22,6 @@ module IfaceEnv (
 #include "HsVersions.h"
 
 import TcRnMonad
-import TysWiredIn
 import HscTypes
 import Type
 import Var
@@ -33,10 +32,8 @@ import FastString
 import FastStringEnv
 import IfaceType
 import NameCache
-import PrelNames ( gHC_TYPES, gHC_PRIM, gHC_TUPLE )
 import UniqSupply
 import SrcLoc
-import Util
 
 import Outputable
 import Data.List     ( partition )

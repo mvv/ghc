@@ -148,7 +148,7 @@ import Avail
 import Module
 import InstEnv          ( InstEnv, ClsInst, identicalClsInstHead )
 import FamInstEnv
-import CoreSyn          ( CoreProgram, RuleBase )
+import CoreSyn          ( CoreProgram, RuleBase, CoreRule, CoreVect )
 import Name
 import NameEnv
 import NameSet
@@ -175,7 +175,6 @@ import DynFlags
 import DriverPhases     ( Phase, HscSource(..), isHsBootOrSig, hscSourceString )
 import BasicTypes
 import IfaceSyn
-import CoreSyn          ( CoreRule, CoreVect )
 import Maybes
 import Outputable
 import SrcLoc
