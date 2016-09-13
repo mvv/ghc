@@ -192,6 +192,7 @@ Library
         NameSet
         OccName
         RdrName
+        NameCache
         SrcLoc
         UniqSupply
         Unique

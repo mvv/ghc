@@ -109,7 +109,7 @@ import SrcLoc
 import TcRnDriver
 import TcIface          ( typecheckIface )
 import TcRnMonad
-import IfaceEnv         ( initNameCache )
+import NameCache        ( initNameCache )
 import LoadIface        ( ifaceStats, initExternalPackageState )
 import PrelInfo
 import MkIface

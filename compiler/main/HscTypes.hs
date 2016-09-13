@@ -98,7 +98,7 @@ module HscTypes (
         -- * Information on imports and exports
         WhetherHasOrphans, IsBootInterface, Usage(..),
         Dependencies(..), noDependencies,
-        NameCache(..), OrigNameCache, updNameCacheIO,
+        updNameCacheIO,
         IfaceExport,
 
         -- * Warnings
@@ -181,7 +181,6 @@ import Outputable
 import SrcLoc
 import Unique
 import UniqDFM
-import UniqSupply
 import FastString
 import StringBuffer     ( StringBuffer )
 import Fingerprint
@@ -189,6 +188,7 @@ import MonadUtils
 import Bag
 import Binary
 import ErrUtils
+import NameCache
 import Platform
 import Util
 import GHC.Serialized   ( Serialized )
@@ -2445,24 +2445,11 @@ interface file); so we give it 'noSrcLoc' then.  Later, when we find
 its binding site, we fix it up.
 -}
 
--- | The NameCache makes sure that there is just one Unique assigned for
--- each original name; i.e. (module-name, occ-name) pair and provides
--- something of a lookup mechanism for those names.
-data NameCache
- = NameCache {  nsUniqs :: !UniqSupply,
-                -- ^ Supply of uniques
-                nsNames :: !OrigNameCache
-                -- ^ Ensures that one original name gets one unique
-   }
-
 updNameCacheIO :: HscEnv
                -> (NameCache -> (NameCache, c))  -- The updating function
                -> IO c
 updNameCacheIO hsc_env upd_fn
   = atomicModifyIORef' (hsc_NC hsc_env) upd_fn
-
--- | Per-module cache of original 'OccName's given 'Name's
-type OrigNameCache   = ModuleEnv (OccEnv Name)
 
 mkSOName :: Platform -> FilePath -> FilePath
 mkSOName platform root

@@ -483,6 +483,7 @@ compiler_stage2_dll0_MODULES = \
 	HsUtils \
 	HscTypes \
 	IOEnv \
+  NameCache \
 	Id \
 	IdInfo \
 	IfaceSyn \

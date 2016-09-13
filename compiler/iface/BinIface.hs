@@ -36,6 +36,7 @@ import ErrUtils
 import FastMutInt
 import Unique
 import Outputable
+import NameCache
 import Platform
 import FastString
 import Constants
