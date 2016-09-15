@@ -1749,7 +1749,7 @@ tcSeq loc fun_name args res_ty
               -> do { rr_ty <- newFlexiTyVarTy runtimeRepTy
                     ; ty_arg2 <- tcHsTypeApp hs_ty_arg2 (tYPE rr_ty)
                                    -- see Note [Typing rule for seq]
-                    ; _ <- tcSubTypeDS GenSigCtxt ty_arg2 res_ty
+                    ; _ <- tcSubTypeDS (OccurrenceOf fun) GenSigCtxt ty_arg2 res_ty
                     ; return (term_arg1, term_arg2, mkCheckExpType ty_arg2) }
             [Left term_arg1, Left term_arg2]
               -> return (term_arg1, term_arg2, res_ty)
@@ -1772,7 +1772,7 @@ tcTagToEnum loc fun_name args res_ty
        ; arg <- case args of
            [Right hs_ty_arg, Left term_arg]
              -> do { ty_arg <- tcHsTypeApp hs_ty_arg liftedTypeKind
-                   ; _ <- tcSubTypeDS GenSigCtxt ty_arg res_ty
+                   ; _ <- tcSubTypeDS (OccurrenceOf fun) GenSigCtxt ty_arg res_ty
                      -- other than influencing res_ty, we just
                      -- don't care about a type arg passed in.
                      -- So drop the evidence.

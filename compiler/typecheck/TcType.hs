@@ -301,8 +301,9 @@ data ExpType = Check TcType
              | Infer !InferResult
 
 data InferResult
-  = IR { ir_uniq :: Unique  -- for debugging only
+  = IR { ir_uniq :: Unique  -- For debugging only
        , ir_lvl  :: TcLevel -- See Note [TcLevel of ExpType] in TcMType
+       , ir_inst :: Bool    -- True <=> deeply instantiate before returning
        , ir_kind :: Kind
        , ir_ref  :: IORef (Maybe TcType) }
 
@@ -311,8 +312,12 @@ type ExpRhoType   = ExpType
 
 instance Outputable ExpType where
   ppr (Check ty) = text "Check" <> braces (ppr ty)
-  ppr (Infer (IR { ir_uniq = u, ir_lvl = lvl, ir_kind = ki}))
-    = text "Infer" <> braces (ppr u <> comma <> ppr lvl)
+  ppr (Infer ir) = ppr ir
+
+instance Outputable InferResult where
+  ppr (IR { ir_uniq = u, ir_lvl = lvl
+          , ir_kind = ki, ir_inst = inst })
+    = text "Infer" <> braces (ppr u <> comma <> ppr lvl <+> ppr inst)
        <+> dcolon <+> ppr ki
 
 -- | Make an 'ExpType' suitable for checking.

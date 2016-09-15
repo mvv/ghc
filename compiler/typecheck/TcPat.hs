@@ -512,13 +512,12 @@ tc_pat penv (ConPatIn con arg_pats) pat_ty thing_inside
 
 ------------------------
 -- Literal patterns
-tc_pat _ (LitPat simple_lit) pat_ty thing_inside
+tc_pat penv (LitPat simple_lit) pat_ty thing_inside
   = do  { let lit_ty = hsLitType simple_lit
-        ; co <- unifyPatType simple_lit lit_ty pat_ty
-                -- coi is of kind: pat_ty ~ lit_ty
-        ; res <- thing_inside
+        ; wrap   <- tcSubTypeET (pe_orig penv) pat_ty lit_ty
+        ; res    <- thing_inside
         ; pat_ty <- readExpType pat_ty
-        ; return ( mkHsWrapPatCo co (LitPat simple_lit) pat_ty
+        ; return ( mkHsWrapPat wrap (LitPat simple_lit) pat_ty
                  , res) }
 
 ------------------------
@@ -633,6 +632,7 @@ tc_pat penv (SplicePat (HsSpliced mod_finalizers (HsSplicedPat pat)))
 tc_pat _ _other_pat _ _ = panic "tc_pat"        -- ConPatOut, SigPatOut
 
 ----------------
+{-
 unifyPatType :: Outputable a => a -> TcType -> ExpSigmaType -> TcM TcCoercion
 -- In patterns we want a coercion from the
 -- context type (expected) to the actual pattern type
@@ -641,6 +641,7 @@ unifyPatType :: Outputable a => a -> TcType -> ExpSigmaType -> TcM TcCoercion
 unifyPatType thing actual_ty expected_ty
   = do { coi <- unifyExpType (Just thing) actual_ty expected_ty
        ; return (mkTcSymCo coi) }
+-}
 
 {-
 Note [Hopping the LIE in lazy patterns]

@@ -1253,6 +1253,8 @@ tcMonoBinds is_rec sig_fn no_gen
         --      We want to infer a higher-rank type for f
     setSrcSpan b_loc    $
     do  { rhs_ty <- newOpenInferExpType
+              -- See Note [Instantiate when inferring a type]
+
         ; (co_fn, matches')
             <- tcExtendIdBndrs [TcIdBndr_ExpType name rhs_ty NotTopLevel] $
                   -- We extend the error context even for a non-recursive
@@ -1261,8 +1263,6 @@ tcMonoBinds is_rec sig_fn no_gen
                tcMatchesFun (L nm_loc name) matches rhs_ty
         ; rhs_ty  <- readExpType rhs_ty
 
-        -- Deeply instantiate the inferred type
-        -- See Note [Instantiate when inferring a type]
         ; let orig = matchesCtOrigin matches
         ; rhs_ty <- zonkTcType rhs_ty -- NB: zonk to uncover any foralls
         ; (inst_wrap, rhs_ty) <- addErrCtxtM (instErrCtxt name rhs_ty) $

@@ -30,7 +30,8 @@ module TcMType (
   --------------------------------
   -- Expected types
   ExpType(..), ExpSigmaType, ExpRhoType,
-  mkCheckExpType, newOpenInferExpType, readExpType, readExpType_maybe,
+  mkCheckExpType, newOpenInferExpType, newOpenInferExpType_NoInst,
+  readExpType, readExpType_maybe,
   expTypeToType, checkingExpType_maybe, checkingExpType,
   tauifyExpType, inferResultToType,
 
@@ -336,8 +337,14 @@ test gadt/gadt-escape1.
 -- actual data definition is in TcType
 
 -- | Make an 'ExpType' suitable for inferring a type of kind * or #.
+newOpenInferExpType_NoInst :: TcM ExpType
+newOpenInferExpType_NoInst = new_infer_ty False
+
 newOpenInferExpType :: TcM ExpType
-newOpenInferExpType
+newOpenInferExpType = new_infer_ty True
+
+new_infer_ty :: Bool -> TcM ExpType
+new_infer_ty inst
   = do { rr <- newFlexiTyVarTy runtimeRepTy
        ; u <- newUnique
        ; tclvl <- getTcLevel
@@ -345,7 +352,8 @@ newOpenInferExpType
        ; traceTc "newOpenInferExpType" (ppr u <+> dcolon <+> ppr ki)
        ; ref <- newMutVar Nothing
        ; return (Infer (IR { ir_uniq = u, ir_lvl = tclvl
-                           , ir_kind = ki, ir_ref = ref })) }
+                           , ir_kind = ki, ir_ref = ref
+                           , ir_inst = inst })) }
 
 -- | Extract a type out of an ExpType, if one exists. But one should always
 -- exist. Unless you're quite sure you know what you're doing.
@@ -808,6 +816,16 @@ new_meta_tv_x info subst tv
               subst1 = extendTvSubstWithClone subst tv new_tv
         ; return (subst1, new_tv) }
 
+newMetaTyVarAtLevel :: TcLevel -> TcKind -> TcM TcTyVar
+newMetaTyVarAtLevel tc_lvl kind
+  = do  { uniq <- newUnique
+        ; ref  <- newMutVar Flexi
+        ; let name = mkMetaTyVarName uniq (fsLit "p")
+              details = MetaTv { mtv_info  = TauTv
+                               , mtv_ref   = ref
+                               , mtv_tclvl = tc_lvl }
+        ; return (mkTcTyVar name kind details) }
+
 newMetaTyVarAtLevelX :: TcLevel -> TCvSubst -> TcTyVar -> TcM (TCvSubst, TcTyVar)
 -- Make a new meta-tyvar at the specified level,
 -- basing it off an existing TcTyVar
@@ -1183,38 +1201,31 @@ a \/\a in the final result but all the occurrences of a will be zonked to ()
 *                                                                      *
 ********************************************************************* -}
 
-promoteTcType :: CtOrigin -> TcLevel -> TcType -> TcM (TcCoercion, TcType)
+promoteTcType :: TcLevel -> TcType -> TcM (TcCoercion, TcType)
 -- promoteTcType level ty = (co, ty')
 --   * Returns ty' whose max level is just 'level'
 --   *     and co :: ty ~ ty'
 --   * Emits constraints to justify the coercion
 -- See Note [Promoting a type]
-promoteTcType orig dest_lvl ty
+promoteTcType dest_lvl ty
   = do { cur_lvl <- getTcLevel
-       ; if (cur_lvl `sameDepthAs` dest_lvl || null tvs_to_clone)
-             -- The sameDepthAs check is just an optimisation; if it
-             -- holds (cheap) then tvs_to_clone will surely be empty
+       ; if (cur_lvl `sameDepthAs` dest_lvl)
          then dont_promote_it
          else promote_it }
   where
     promote_it :: TcM (TcCoercion, TcType)
-    promote_it = do { (subst, _) <- mapAccumLM (newMetaTyVarAtLevelX dest_lvl)
-                                               empty_subst tvs_to_clone
-                    ; let ty' = substTy subst ty
-                    ; co <- emitWantedEq orig TypeLevel Nominal ty ty'
-                    ; return (co, ty') }
+    promote_it
+      = do { prom_tv <- newMetaTyVarAtLevel dest_lvl (typeKind ty)
+           ; let prom_ty = mkTyVarTy prom_tv
+                 eq_orig = TypeEqOrigin { uo_actual   = ty
+                                        , uo_expected = prom_ty
+                                        , uo_thing    = Nothing }
+
+           ; co <- emitWantedEq eq_orig TypeLevel Nominal ty prom_ty
+           ; return (co, prom_ty) }
 
     dont_promote_it :: TcM (TcCoercion, TcType)
     dont_promote_it = return (mkTcNomReflCo ty, ty)
-
-    free_vs      = tyCoFVsOfType ty
-    tvs_to_clone = toposortTyVars $ filter clone_me $ fvVarList free_vs
-    empty_subst  = mkEmptyTCvSubst (mkInScopeSet (fvVarSet free_vs))
-
-    clone_me :: TyCoVar -> Bool
-    clone_me tv
-      | isTcTyVar tv = tcTyVarLevel tv `strictlyDeeperThan` dest_lvl
-      | otherwise    = False
 
 {- Note [Promoting a type]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1565,11 +1576,7 @@ zonkTidyOrigin env orig@(TypeEqOrigin { uo_actual   = act
                                       , uo_expected = exp
                                       , uo_thing    = m_thing })
   = do { (env1, act') <- zonkTidyTcType env  act
-       ; mb_exp <- readExpType_maybe exp  -- it really should be filled in.
-                                          -- unless we're debugging.
-       ; (env2, exp') <- case mb_exp of
-           Just ty -> second mkCheckExpType <$> zonkTidyTcType env1 ty
-           Nothing -> return (env1, exp)
+       ; (env2, exp') <- zonkTidyTcType env1 exp
        ; (env3, m_thing') <- zonkTidyErrorThing env2 m_thing
        ; return ( env3, orig { uo_actual   = act'
                              , uo_expected = exp'

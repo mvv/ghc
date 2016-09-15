@@ -865,7 +865,7 @@ checkExpectedKind :: TcType               -- the type whose kind we're checking
 checkExpectedKind ty act_kind exp_kind
  = do { (ty', act_kind') <- instantiate ty act_kind exp_kind
       ; let origin = TypeEqOrigin { uo_actual   = act_kind'
-                                  , uo_expected = mkCheckExpType exp_kind
+                                  , uo_expected = exp_kind
                                   , uo_thing    = Just $ mkTypeErrorThing ty'
                                   }
       ; co_k <- uType origin KindLevel act_kind' exp_kind
@@ -1905,7 +1905,7 @@ tcPatSig in_pat_bind sig res_ty
         ; if null sig_tvs then do {
                 -- Just do the subsumption check and return
                   wrap <- addErrCtxtM (mk_msg sig_ty) $
-                          tcSubTypeET_NC PatSigCtxt res_ty sig_ty
+                          tcSubTypeET PatSigOrigin PatSigCtxt res_ty sig_ty
                 ; return (sig_ty, [], sig_wcs, wrap)
         } else do
                 -- Type signature binds at least one scoped type variable
@@ -1928,7 +1928,7 @@ tcPatSig in_pat_bind sig res_ty
 
         -- Now do a subsumption check of the pattern signature against res_ty
         ; wrap <- addErrCtxtM (mk_msg sig_ty) $
-                  tcSubTypeET_NC PatSigCtxt res_ty sig_ty
+                  tcSubTypeET PatSigOrigin PatSigCtxt res_ty sig_ty
 
         -- Phew!
         ; return (sig_ty, sig_tvs, sig_wcs, wrap)
